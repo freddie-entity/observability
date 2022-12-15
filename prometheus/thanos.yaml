@@ -1,0 +1,75 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: "thanos-store-api" # Service just to all Prometheus instance for Thanos query
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: grpc
+    port: 10901
+    targetPort: grpc
+  selector:
+    thanos-store-api: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-query
+  namespace: monitoring
+  labels:
+    app: thanos-query
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thanos-query
+  template:
+    metadata:
+      labels:
+        app: thanos-query
+    spec:
+      containers:
+      - name: thanos-query
+        image: improbable/thanos:v0.5.0
+        resources:
+          limits:
+            cpu: 500m
+            memory: 500Mi
+          requests:
+            cpu: 100m
+            memory: 500Mi
+        args:
+        - "query"
+        - "--log.level=debug"
+        - "--query.replica-label=prometheus_replica"
+        - "--store.sd-dns-resolver=miekgdns"
+        - "--store=dnssrv+_grpc._tcp.thanos-store-api.monitoring.svc.cluster.local"
+        ports:
+        - name: http
+          containerPort: 10902
+        - name: grpc
+          containerPort: 10901
+        - name: cluster
+          containerPort: 10900
+---
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: thanos-config
+#   namespace: prometheus
+# data:
+#   thanos.config: asd
+---
+apiVersion: v1
+kind: Service
+metadata: 
+  name: thanos-query # For Thanos query single enpoint
+spec:
+  selector:
+    app: thanos-query
+  ports:
+  - port: 10902
+    targetPort: 10902
